@@ -21,16 +21,12 @@ let infinite_bytes_ref bs n =
   then 0 (* treat byte-strings as followed by an infinite suffix of zeroes *)
   else int_of_char (String.unsafe_get bs n)
 
-(* let infinite_bytes_eq a b = *)
-(*   let limit = max (String.length a) (String.length b) in *)
-(*   let rec check i = *)
-(*     if i = limit then true *)
-(*     else if infinite_bytes_ref a i = infinite_bytes_ref b i then check (i + 1) *)
-(*     else false *)
-(*   in check 0 *)
+(*---------------------------------------------------------------------------*)
+(* infinite_bytes_eq *)
 
-let infinite_bytes_eq a b = Faststr.infinite_bytes_compare a b = 0
-(* let infinite_bytes_eq a b = *)
+let infinite_bytes_eq_fast a b = Faststr.infinite_bytes_compare a b = 0
+
+(* let infinite_bytes_eq_slow a b = *)
 (*   let la = String.length a in *)
 (*   let lb = String.length b in *)
 (*   let switch = min la lb in *)
@@ -52,39 +48,49 @@ let infinite_bytes_eq a b = Faststr.infinite_bytes_compare a b = 0
 (*   then String.compare a b = 0 *)
 (*   else check_lower 0 *)
 
-let is_bit_set n bit = (n land (1 lsl bit)) <> 0
+(* let infinite_bytes_eq_slowest a b = *)
+(*   let limit = max (String.length a) (String.length b) in *)
+(*   let rec check i = *)
+(*     if i = limit then true *)
+(*     else if infinite_bytes_ref a i = infinite_bytes_ref b i then check (i + 1) *)
+(*     else false *)
+(*   in check 0 *)
 
-let bit_ref bs n =
-  let byte_index = n / 8 in
-  let bit_index = 7 - (n mod 8) in
-  is_bit_set (infinite_bytes_ref bs byte_index) bit_index
+(* We default to the fast implementation from faststr.c. *)
+let infinite_bytes_eq = infinite_bytes_eq_fast
 
-let mem k t = match t with
-  | Empty -> false
-  | Nonempty (_, n) ->
-    let rec walk n = match n with
-      | Leaf bs -> infinite_bytes_eq bs k
-      | Node (index, zero, one) -> walk (if bit_ref k index then one else zero)
-    in walk n
+(*---------------------------------------------------------------------------*)
+(* join *)
 
 type insertion =
   | Pos of index
   | Kid of node
 
-(* let integer_length x = *)
-(*   let x = x lor (x lsr 1) in *)
-(*   let x = x lor (x lsr 2) in *)
-(*   let x = x lor (x lsr 4) in *)
-(*   let x = (x land 0x55) + ((x lsr 1) land 0x55) in *)
-(*   let x = (x land 0x33) + ((x lsr 2) land 0x33) in *)
-(*   let x = (x land 0x0f) + ((x lsr 4) land 0x0f) in *)
-(*   x *)
+let join_fast a b =
+  let pos = Faststr.infinite_bytes_diffbitpos a b in
+  if pos = -1
+  then Kid (Leaf a) (* they're the same (infinite zeros on the end!) byte string *)
+  else Pos pos
 
-let integer_length i =
-  let rec loop i n = if i = 0 then n else loop (i lsr 1) (n + 1) in
-  loop i 0
+(* let integer_length i = *)
+(*   let rec loop i n = if i = 0 then n else loop (i lsr 1) (n + 1) in *)
+(*   loop i 0 *)
 
-(* let join a b = *)
+(* let join_slow a b = *)
+(*   let limit = max (String.length a) (String.length b) in *)
+(*   let rec find_differing_byte i = *)
+(*     if i = limit *)
+(*     then Kid (Leaf a) (\* they're the same (infinite zeros on the end!) byte string *\) *)
+(*     else *)
+(*       let delta = (infinite_bytes_ref a i) lxor (infinite_bytes_ref b i) in *)
+(*       if delta = 0 *)
+(*       then find_differing_byte (i + 1) *)
+(*       else *)
+(* 	let bit = 8 - (integer_length delta) (\* 0th bit is high *\) in *)
+(* 	Pos (i * 8 + bit) *)
+(*   in find_differing_byte 0 *)
+
+(* let join_slowest a b = *)
 (*   let la = String.length a in *)
 (*   let lb = String.length b in *)
 (*   let switch = min la lb in *)
@@ -114,39 +120,25 @@ let integer_length i =
 (* 	Pos (i * 8 + bit) *)
 (*   in find_differing_byte 0 *)
 
-let join_fast a b =
-  let pos = Faststr.infinite_bytes_diffbitpos a b in
-  if pos = -1
-  then Kid (Leaf a) (* they're the same (infinite zeros on the end!) byte string *)
-  else Pos pos
-
-let join_slow a b =
-  let limit = max (String.length a) (String.length b) in
-  let rec find_differing_byte i =
-    if i = limit
-    then Kid (Leaf a) (* they're the same (infinite zeros on the end!) byte string *)
-    else
-      let delta = (infinite_bytes_ref a i) lxor (infinite_bytes_ref b i) in
-      if delta = 0
-      then find_differing_byte (i + 1)
-      else
-	let bit = 8 - (integer_length delta) (* 0th bit is high *) in
-	Pos (i * 8 + bit)
-  in find_differing_byte 0
-
-(* exception Fast_implementation_error *)
-(* let join a b = *)
-(*   let f = join_fast a b in *)
-(*   let s = join_slow a b in *)
-(*   if f = s *)
-(*   then f *)
-(*   else ((match f, s with *)
-(*     | (Kid _, Kid _) -> Printf.printf "huh, both kids\n" *)
-(*     | (Kid _, Pos p) -> Printf.printf "fast -> kid, slow -> pos %d\n" p *)
-(*     | (Pos p, Kid _) -> Printf.printf "slow -> kid, fast -> pos %d\n" p *)
-(*     | (Pos x, Pos y) -> Printf.printf "fast -> pos %d, slow -> pos %d\n" x y *)
-(*   ); raise Fast_implementation_error) *)
+(* We default to the fast implementation from faststr.c. *)
 let join = join_fast
+
+(*---------------------------------------------------------------------------*)
+
+let is_bit_set n bit = (n land (1 lsl bit)) <> 0
+
+let bit_ref bs n =
+  let byte_index = n / 8 in
+  let bit_index = 7 - (n mod 8) in
+  is_bit_set (infinite_bytes_ref bs byte_index) bit_index
+
+let mem k t = match t with
+  | Empty -> false
+  | Nonempty (_, n) ->
+    let rec walk n = match n with
+      | Leaf bs -> infinite_bytes_eq bs k
+      | Node (index, zero, one) -> walk (if bit_ref k index then one else zero)
+    in walk n
 
 let add k t = match t with
   | Empty -> Nonempty (1, Leaf k)
