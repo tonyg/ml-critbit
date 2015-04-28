@@ -102,6 +102,9 @@
 
 (define n-bases (length (bases-for-padding 0)))
 
+(define (too-big? problem-size padding)
+  (> (* problem-size padding) 8000000000))
+
 ;;---------------------------------------------------------------------------
 ;; Generate and load result CSV
 
@@ -109,7 +112,8 @@
 (define results
   (for*/hash ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
               [padding (in-list paddings)]
-              [base (in-list (bases-for-padding padding))])
+              [base (in-list (bases-for-padding padding))]
+              #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
     (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
     (define result-filename (format "results-~a-~a-~a-~a.csv" problem-size nrepeats padding base))
     (when (not (file-exists? result-filename))
@@ -149,7 +153,8 @@
     (lines
      #:color color
      #:label structure
-     (for*/list ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)])
+     (for*/list ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
+                 #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
        (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
        (define resultset (hash-ref results (list problem-size padding base)))
        (define row-name (format "~a ~a" structure variation))
@@ -158,7 +163,8 @@
 
   (define (error-bars-for structure)
     (asymmetric-error-bars
-     (for*/list ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)])
+     (for*/list ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
+                 #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
        (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
        (define resultset (hash-ref results (list problem-size padding base)))
        (define row-name (format "~a ~a" structure variation))
