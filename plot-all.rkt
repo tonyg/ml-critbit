@@ -79,8 +79,8 @@
     (80000 20)
     (100000 20)
     (200000 15)
-    (500000 15)
-    (1000000 10)
+    ;; (500000 15)
+    ;; (1000000 10)
     ))
 
 (define paddings
@@ -115,6 +115,44 @@
 ;; Generate and load result CSV
 
 (void (system "make"))
+
+(define (generate-results problem-size nrepeats padding base)
+  (define result-filename (format "results-~a-~a-~a-~a.csv" problem-size nrepeats padding base))
+  (when (not (file-exists? result-filename))
+    (printf "Generating ~a...\n" result-filename)
+    (flush-output)
+    (system (format "./t.native ~a ~a ~a ~a > ~a"
+                    problem-size
+                    nrepeats
+                    padding
+                    base
+                    result-filename))))
+
+(define gen-ch (make-channel))
+(define done-ch (make-channel))
+(define n-workers 4)
+
+(for ([n n-workers])
+  (thread (lambda ()
+            (let loop ()
+              (define params (channel-get gen-ch))
+              (when params
+                (log-info "Worker ~v running ~v" n params)
+                (apply generate-results params)
+                (loop)))
+            (channel-put done-ch #t))))
+
+(for* ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
+       [padding (in-list paddings)]
+       [base (in-list (bases-for-padding padding))]
+       #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
+  (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
+  (channel-put gen-ch (list problem-size nrepeats padding base)))
+
+(for ([n n-workers])
+  (channel-put gen-ch #f)
+  (channel-get done-ch))
+
 (define results
   (for*/hash ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
               [padding (in-list paddings)]
@@ -122,15 +160,6 @@
               #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
     (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
     (define result-filename (format "results-~a-~a-~a-~a.csv" problem-size nrepeats padding base))
-    (when (not (file-exists? result-filename))
-      (printf "Generating ~a...\n" result-filename)
-      (flush-output)
-      (system (format "./t.native ~a ~a ~a ~a > ~a"
-                      problem-size
-                      nrepeats
-                      padding
-                      base
-                      result-filename)))
     (values (list problem-size padding base)
             (let ((rows (csv->list (file->string result-filename))))
               (define headings (car rows))
