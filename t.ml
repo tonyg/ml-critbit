@@ -6,11 +6,17 @@ let to_string t = "[" ^ (String.concat "; " (elements t)) ^ "]"
 
 let dump t = print_string (to_string t); print_char '\n'
 
-let time thunk =
+let time thunk m =
   let start = Unix.gettimeofday() in
-  let result = thunk() in
+  let rec loop remaining =
+    if remaining > 1
+    then begin
+      thunk();
+      loop (remaining - 1)
+    end else thunk() in
+  let result = loop m in
   let delta = Unix.gettimeofday() -. start in
-  (delta, result)
+  (delta /. (float_of_int m), result)
 
 let rec sum_of samples = match samples with
   | [] -> 0.0
@@ -32,7 +38,7 @@ let standard_error_of_mean_of samples =
   sample_standard_deviation_of samples /. sqrt (float_of_int (List.length samples))
 
 let stats_header additional_info =
-  Printf.printf "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n%!"
+  Printf.printf "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n%!"
     "label"
     "q0_microsec"
     "q1_microsec"
@@ -51,14 +57,15 @@ let stats_header additional_info =
     "mean_rate_kHz"
     "hi_95ci_rate_kHz"
     "nrepeats"
+    "bulk_count"
     "problem_size"
     (String.concat "," additional_info)
 
-let stats n scale additional_info label thunk =
+let stats n bulk_count scale additional_info label thunk =
   let rec loop remaining =
     if remaining > 0
     then
-      let (delta, _) = time thunk in
+      let (delta, _) = time thunk bulk_count in
       delta :: loop (remaining - 1)
     else []
   in
@@ -91,7 +98,7 @@ let stats n scale additional_info label thunk =
   let scaled_hi_ci = hi_ci /. scale_f in
   let microseconds = 1000000.0 in
   let one_millisecond = 0.001 in
-  Printf.printf "%s,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%d,%d,%s\n%!"
+  Printf.printf "%s,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%d,%d,%d,%s\n%!"
     label
     (scaled_q0_val *. microseconds)
     (scaled_q1_val *. microseconds)
@@ -110,6 +117,7 @@ let stats n scale additional_info label thunk =
     (one_millisecond /. scaled_mean)
     (one_millisecond /. scaled_lo_ci)
     n
+    bulk_count
     scale
     (String.concat "," additional_info);
   result
@@ -135,18 +143,18 @@ let main () =
   (* dump x'; *)
   (* dump x''; *)
 
-  let (max_count, nrepeats, padding, base) =
+  let (max_count, nrepeats, bulk_count, padding, base) =
     match Sys.argv with
-      | [| _ |] -> (50000, 15, 10000, 9000)
-      | [| _; c; n; p; b |] -> (int_of_string c, int_of_string n, int_of_string p, int_of_string b)
+      | [| _ |] -> (50000, 15, 1, 10000, 9000)
+      | [| _; c; n; k; p; b |] -> (int_of_string c, int_of_string n, int_of_string k, int_of_string p, int_of_string b)
       | _ ->
-	(Printf.printf "Usage: t.native | t.native problem_size nrepeats padding base\n";
+	(Printf.printf "Usage: t.native | t.native problem_size nrepeats bulk_count padding base\n";
 	 raise Exit)
   in
 
   stats_header ["padding"; "base"];
   let run_experiment label thunk =
-    stats nrepeats max_count [string_of_int padding; string_of_int base] label thunk
+    stats nrepeats bulk_count max_count [string_of_int padding; string_of_int base] label thunk
   in
 
   let str4s = range_fold (fun n a -> str4 padding base n :: a) max_count [] in

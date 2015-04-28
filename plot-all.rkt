@@ -61,26 +61,26 @@
 
 (require 'asymmetric-error-bars)
 
-(define problem-sizes-and-nrepeats
-  '((10 30000)
-    (20 20000)
-    (50 10000)
-    (100 5000)
-    (200 2500)
-    (400 1250)
-    (800 625)
-    (1000 500)
-    (2000 250)
-    (4000 125)
-    (8000 63)
-    (10000 50)
-    (20000 25)
-    (40000 20)
-    (80000 20)
-    (100000 20)
-    (200000 15)
-    ;; (500000 15)
-    ;; (1000000 10)
+(define problem-sizes-bulk-counts-and-nrepeats
+  '((10 500 300)
+    (20 250 400)
+    (50 100 500)
+    (100 10 500)
+    (200 5 500)
+    (400 2 625)
+    (800 1 625)
+    (1000 1 500)
+    (2000 1 250)
+    (4000 1 125)
+    (8000 1 63)
+    (10000 1 50)
+    (20000 1 25)
+    (40000 1 20)
+    (80000 1 20)
+    (100000 1 20)
+    (200000 1 15)
+    ;; (500000 1 15)
+    ;; (1000000 1 10)
     ))
 
 (define paddings
@@ -116,14 +116,16 @@
 
 (void (system "make"))
 
-(define (generate-results problem-size nrepeats padding base)
-  (define result-filename (format "results-~a-~a-~a-~a.csv" problem-size nrepeats padding base))
+(define (generate-results problem-size nrepeats bulk-count padding base)
+  (define result-filename
+    (format "results-~a-~a-~a-~a-~a.csv" problem-size nrepeats bulk-count padding base))
   (when (not (file-exists? result-filename))
     (printf "Generating ~a...\n" result-filename)
     (flush-output)
-    (system (format "./t.native ~a ~a ~a ~a > ~a"
+    (system (format "./t.native ~a ~a ~a ~a ~a > ~a"
                     problem-size
                     nrepeats
+                    bulk-count
                     padding
                     base
                     result-filename))))
@@ -142,24 +144,25 @@
                 (loop)))
             (channel-put done-ch #t))))
 
-(for* ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
+(for* ([size-count-and-nrepeats (in-list problem-sizes-bulk-counts-and-nrepeats)]
        [padding (in-list paddings)]
        [base (in-list (bases-for-padding padding))]
-       #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
-  (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
-  (channel-put gen-ch (list problem-size nrepeats padding base)))
+       #:when (not (too-big? (car size-count-and-nrepeats) padding)))
+  (match-define (list problem-size bulk-count nrepeats) size-count-and-nrepeats)
+  (channel-put gen-ch (list problem-size nrepeats bulk-count padding base)))
 
 (for ([n n-workers])
   (channel-put gen-ch #f)
   (channel-get done-ch))
 
 (define results
-  (for*/hash ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
+  (for*/hash ([size-count-and-nrepeats (in-list problem-sizes-bulk-counts-and-nrepeats)]
               [padding (in-list paddings)]
               [base (in-list (bases-for-padding padding))]
-              #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
-    (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
-    (define result-filename (format "results-~a-~a-~a-~a.csv" problem-size nrepeats padding base))
+              #:when (not (too-big? (car size-count-and-nrepeats) padding)))
+    (match-define (list problem-size bulk-count nrepeats) size-count-and-nrepeats)
+    (define result-filename
+      (format "results-~a-~a-~a-~a-~a.csv" problem-size nrepeats bulk-count padding base))
     (values (list problem-size padding base)
             (let ((rows (csv->list (file->string result-filename))))
               (define headings (car rows))
@@ -188,9 +191,9 @@
     (lines
      #:color color
      #:label structure
-     (for*/list ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
-                 #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
-       (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
+     (for*/list ([size-count-and-nrepeats (in-list problem-sizes-bulk-counts-and-nrepeats)]
+                 #:when (not (too-big? (car size-count-and-nrepeats) padding)))
+       (define problem-size (car size-count-and-nrepeats))
        (define resultset (hash-ref results (list problem-size padding base)))
        (define row-name (format "~a ~a" structure variation))
        (vector problem-size
@@ -198,9 +201,9 @@
 
   (define (error-bars-for structure)
     (asymmetric-error-bars
-     (for*/list ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
-                 #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
-       (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
+     (for*/list ([size-count-and-nrepeats (in-list problem-sizes-bulk-counts-and-nrepeats)]
+                 #:when (not (too-big? (car size-count-and-nrepeats) padding)))
+       (define problem-size (car size-count-and-nrepeats))
        (define resultset (hash-ref results (list problem-size padding base)))
        (define row-name (format "~a ~a" structure variation))
        (vector problem-size
@@ -212,9 +215,9 @@
     (points
      #:sym sym
      (for*/fold ([ps '()])
-                ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
-                 #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
-       (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
+                ([size-count-and-nrepeats (in-list problem-sizes-bulk-counts-and-nrepeats)]
+                 #:when (not (too-big? (car size-count-and-nrepeats) padding)))
+       (define problem-size (car size-count-and-nrepeats))
        (define resultset (hash-ref results (list problem-size padding base)))
        (define row-name (format "~a ~a" structure variation))
        (define min-rate (string->number (hash-ref (hash-ref resultset row-name) "q0_rate_kHz")))
