@@ -32,20 +32,19 @@ static int first_nonzero_bit(char const *buf, mlsize_t len, mlsize_t offset_byte
   return -1;
 }
 
-CAMLprim value faststr_infinite_bytes_compare(value s1, value s2)
+CAMLprim value faststr_infinite_bytes_eq(value s1, value s2)
 {
   mlsize_t len1, len2;
   int res;
 
-  if (s1 == s2) return Val_int(0);
+  if (s1 == s2) return Val_bool(1);
   len1 = caml_string_length(s1);
   len2 = caml_string_length(s2);
   res = memcmp(String_val(s1), String_val(s2), len1 <= len2 ? len1 : len2);
-  if (res < 0) return Val_int(-1);
-  if (res > 0) return Val_int(1);
-  if (len1 < len2) return all_zero(String_val(s2) + len1, len2 - len1) ? Val_int(0) : Val_int(-1);
-  if (len1 > len2) return all_zero(String_val(s1) + len2, len1 - len2) ? Val_int(0) : Val_int(1);
-  return Val_int(0);
+  if (res != 0) return Val_bool(0);
+  if (len1 < len2) return Val_bool(all_zero(String_val(s2) + len1, len2 - len1));
+  if (len1 > len2) return Val_bool(all_zero(String_val(s1) + len2, len1 - len2));
+  return Val_bool(1);
 }
 
 CAMLprim value faststr_infinite_bytes_diffbitpos(value s1, value s2)

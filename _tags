@@ -1,2 +1,2 @@
 true: use_unix
-<t.native>: use_faststr
+<t.native>: use_infinite_bytes
