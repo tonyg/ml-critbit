@@ -174,7 +174,8 @@
                (string->number (hash-ref (hash-ref resultset row-name) "hi_95ci_kHz")))))) ;; TODO: fix
 
   (parameterize ([discrete-histogram-skip 2.5] ;; any value larger than the number of alternatives
-                 [plot-x-transform log-transform])
+                 [plot-x-transform log-transform]
+                 [plot-x-ticks (log-ticks)])
     (plot-file (list (lines-for "Critbit" 1)
                      (lines-for "StringSet" 2)
                      (error-bars-for "Critbit")
