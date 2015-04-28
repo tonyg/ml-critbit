@@ -84,21 +84,27 @@
     ))
 
 (define paddings
-  (cons 0 (map (lambda (v) (- v 4))
-               (list 8
-                     16
-                     32
-                     64
-                     128
-                     512
-                     1024
-                     4096
-                     16384))))
+  (cons 0 (map (lambda (v) (- (expt 2 v) 4))
+               (list
+                3
+                4
+                6
+                8
+                10
+                12
+                14
+                ))))
 
 (define (bases-for-padding padding)
   (delete-duplicates
    (map (lambda (frac) (* padding frac))
-        (list 0 1/4 2/4 3/4 4/4))))
+        (list
+         0
+         ;; 1/4
+         2/4
+         ;; 3/4
+         4/4
+         ))))
 
 (define n-bases (length (bases-for-padding 0)))
 
@@ -169,19 +175,42 @@
        (define resultset (hash-ref results (list problem-size padding base)))
        (define row-name (format "~a ~a" structure variation))
        (vector problem-size
-               (string->number (hash-ref (hash-ref resultset row-name) "mean_rate_kHz"))
-               (string->number (hash-ref (hash-ref resultset row-name) "lo_95ci_rate_kHz"))
-               (string->number (hash-ref (hash-ref resultset row-name) "hi_95ci_kHz")))))) ;; TODO: fix
+               (or (string->number (hash-ref (hash-ref resultset row-name) "q2_rate_kHz")) 0)
+               (or (string->number (hash-ref (hash-ref resultset row-name) "q0_rate_kHz")) 0)
+               (or (string->number (hash-ref (hash-ref resultset row-name) "q4_rate_kHz")) +inf.0)))))
+
+  (define (max-min-for structure sym)
+    (points
+     #:sym sym
+     (for*/fold ([ps '()])
+                ([problem-size-and-nrepeats (in-list problem-sizes-and-nrepeats)]
+                 #:when (not (too-big? (car problem-size-and-nrepeats) padding)))
+       (match-define (list problem-size nrepeats) problem-size-and-nrepeats)
+       (define resultset (hash-ref results (list problem-size padding base)))
+       (define row-name (format "~a ~a" structure variation))
+       (define min-rate (string->number (hash-ref (hash-ref resultset row-name) "q0_rate_kHz")))
+       (define max-rate (string->number (hash-ref (hash-ref resultset row-name) "q4_rate_kHz")))
+       (append (if min-rate (list (vector problem-size min-rate)) '())
+               (if max-rate (list (vector problem-size max-rate)) '())
+               ps))))
 
   (parameterize ([discrete-histogram-skip 2.5] ;; any value larger than the number of alternatives
                  [plot-x-transform log-transform]
                  [plot-x-ticks (log-ticks)])
     (plot-file (list (lines-for "Critbit" 1)
                      (lines-for "StringSet" 2)
+                     (lines-for "Hashtbl" 3)
                      (error-bars-for "Critbit")
-                     (error-bars-for "StringSet"))
+                     (error-bars-for "StringSet")
+                     (error-bars-for "Hashtbl")
+                     ;; (max-min-for "Critbit" 1)
+                     ;; (max-min-for "StringSet" 2)
+                     ;; (max-min-for "Hashtbl" 3)
+                     )
                plot-filename
                'png
+               #:width 640
+               #:height 480
                #:title (format "Item ~a, item length ~a, common prefix ~a"
                                variation
                                padding
@@ -189,4 +218,5 @@
                #:x-label "Set size"
                #:y-label "Operations per second, thousands (kHz)"
                #:legend-anchor 'top-right
+               #:x-min 9
                #:y-min 0)))
