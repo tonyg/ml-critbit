@@ -76,7 +76,7 @@ let join_fast a b =
 (*   let rec loop i n = if i = 0 then n else loop (i lsr 1) (n + 1) in *)
 (*   loop i 0 *)
 
-(* let join_slow a b = *)
+(* let join_slowest a b = *)
 (*   let limit = max (String.length a) (String.length b) in *)
 (*   let rec find_differing_byte i = *)
 (*     if i = limit *)
@@ -90,7 +90,7 @@ let join_fast a b =
 (* 	Pos (i * 8 + bit) *)
 (*   in find_differing_byte 0 *)
 
-(* let join_slowest a b = *)
+(* let join_slow a b = *)
 (*   let la = String.length a in *)
 (*   let lb = String.length b in *)
 (*   let switch = min la lb in *)
