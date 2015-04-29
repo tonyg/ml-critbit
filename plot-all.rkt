@@ -245,7 +245,7 @@
                #:height 480
                #:title (format "Item ~a, item length ~a, common prefix ~a"
                                variation
-                               padding
+                               (+ padding 4)
                                base)
                #:x-label "Set size"
                #:y-label "Operations per second, thousands (kHz)"
