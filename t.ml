@@ -37,29 +37,46 @@ let sample_standard_deviation_of samples = sqrt (unbiased_sample_variance_of sam
 let standard_error_of_mean_of samples =
   sample_standard_deviation_of samples /. sqrt (float_of_int (List.length samples))
 
+let key_figures_labels kind =
+  String.concat "," (List.map (fun l -> l ^ "_" ^ kind)
+		       ["q0"; "q1"; "q2"; "q3"; "q4"; "lo_95ci"; "mean"; "hi_95ci"])
+
 let stats_header additional_info =
-  Printf.printf "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n%!"
+  Printf.printf "%s,%s,%s,%s,%s,%s,%s,%s\n%!"
     "label"
-    "q0_microsec"
-    "q1_microsec"
-    "q2_microsec"
-    "q3_microsec"
-    "q4_microsec"
-    "lo_95ci_microsec"
-    "mean_microsec"
-    "hi_95ci_microsec"
-    "q0_rate_kHz"
-    "q1_rate_kHz"
-    "q2_rate_kHz"
-    "q3_rate_kHz"
-    "q4_rate_kHz"
-    "lo_95ci_rate_kHz"
-    "mean_rate_kHz"
-    "hi_95ci_rate_kHz"
+    (key_figures_labels "microsec")
+    (key_figures_labels "rate_kHz")
     "nrepeats"
     "bulk_count"
     "problem_size"
     (String.concat "," additional_info)
+    "rawdata"
+
+let key_figures multiplier raw_samples =
+  let n = List.length raw_samples in
+  let samples = List.map (fun x -> x *. multiplier) raw_samples in
+  let sorted_samples = List.sort compare samples in
+  let q0 = 0 in
+  let q1 = n / 4 in
+  let q2 = n / 2 in
+  let q3 = n * 3 / 4 in
+  let q4 = n - 1 in
+  let q0_val = List.nth sorted_samples q0 in
+  let q1_val = List.nth sorted_samples q1 in
+  let q2_val = List.nth sorted_samples q2 in
+  let q3_val = List.nth sorted_samples q3 in
+  let q4_val = List.nth sorted_samples q4 in
+  let mean_val = mean_of samples in
+  let standard_error_of_mean_val = standard_error_of_mean_of samples in
+  let half_ci_val = 1.96 *. standard_error_of_mean_val in
+  let lo_ci_val = mean_val -. half_ci_val in
+  let hi_ci_val = mean_val +. half_ci_val in
+  ((q0_val, q1_val, q2_val, q3_val, q4_val), (lo_ci_val, mean_val, hi_ci_val), sorted_samples)
+
+let key_figures_str v =
+  match v with
+    | ((q0, q1, q2, q3, q4), (lo, mean, hi), _) ->
+      Printf.sprintf "%g,%g,%g,%g,%g,%g,%g,%g" q0 q1 q2 q3 q4 lo mean hi
 
 let stats n bulk_count scale additional_info label thunk =
   let rec loop remaining =
@@ -70,56 +87,21 @@ let stats n bulk_count scale additional_info label thunk =
     else []
   in
   let result = thunk() in (* discard a single run to warm up *)
-  let samples = loop n in
-  let q0 = 0 in
-  let q1 = n / 4 in
-  let q2 = n / 2 in
-  let q3 = n * 3 / 4 in
-  let q4 = n - 1 in
-  let sorted_samples = List.sort compare samples in
-  let q0_val = List.nth sorted_samples q0 in
-  let q1_val = List.nth sorted_samples q1 in
-  let q2_val = List.nth sorted_samples q2 in
-  let q3_val = List.nth sorted_samples q3 in
-  let q4_val = List.nth sorted_samples q4 in
-  let mean = mean_of samples in
-  let standard_error_of_mean = standard_error_of_mean_of samples in
-  let half_ci = 1.96 *. standard_error_of_mean in
-  let lo_ci = mean -. half_ci in
-  let hi_ci = mean +. half_ci in
   let scale_f = float_of_int scale in
-  let scaled_q0_val = q0_val /. scale_f in
-  let scaled_q1_val = q1_val /. scale_f in
-  let scaled_q2_val = q2_val /. scale_f in
-  let scaled_q3_val = q3_val /. scale_f in
-  let scaled_q4_val = q4_val /. scale_f in
-  let scaled_mean = mean /. scale_f in
-  let scaled_lo_ci = lo_ci /. scale_f in
-  let scaled_hi_ci = hi_ci /. scale_f in
-  let microseconds = 1000000.0 in
-  let one_millisecond = 0.001 in
-  Printf.printf "%s,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%d,%d,%d,%s\n%!"
+  let samples = List.map (fun x -> x /. scale_f) (loop n) in
+  let periods_str = key_figures_str (key_figures 1000000.0 samples) in
+  let rates = key_figures 0.001 (List.map (fun x -> 1.0 /. x) samples) in
+  let (_, _, sorted_rates) = rates in
+  let rates_str = key_figures_str rates in
+  Printf.printf "%s,%s,%s,%d,%d,%d,%s,%s\n%!"
     label
-    (scaled_q0_val *. microseconds)
-    (scaled_q1_val *. microseconds)
-    (scaled_q2_val *. microseconds)
-    (scaled_q3_val *. microseconds)
-    (scaled_q4_val *. microseconds)
-    (scaled_lo_ci *. microseconds)
-    (scaled_mean *. microseconds)
-    (scaled_hi_ci *. microseconds)
-    (one_millisecond /. scaled_q4_val)
-    (one_millisecond /. scaled_q3_val)
-    (one_millisecond /. scaled_q2_val)
-    (one_millisecond /. scaled_q1_val)
-    (one_millisecond /. scaled_q0_val)
-    (one_millisecond /. scaled_hi_ci)
-    (one_millisecond /. scaled_mean)
-    (one_millisecond /. scaled_lo_ci)
+    periods_str
+    rates_str
     n
     bulk_count
     scale
-    (String.concat "," additional_info);
+    (String.concat "," additional_info)
+    (String.concat " " (List.map string_of_float sorted_rates));
   result
 
 let str4 padding base i =

@@ -62,23 +62,24 @@
 (require 'asymmetric-error-bars)
 
 (define problem-sizes-bulk-counts-and-nrepeats
-  '((10 500 300)
-    (20 250 400)
+  '(
+    ;; (10 500 300)
+    ;; (20 250 400)
     (50 100 500)
     (100 10 500)
     (200 5 500)
     (400 2 625)
     (800 1 625)
     (1000 1 500)
-    (2000 1 250)
-    (4000 1 125)
-    (8000 1 63)
-    (10000 1 50)
-    (20000 1 25)
-    (40000 1 20)
-    (80000 1 20)
-    (100000 1 20)
-    (200000 1 15)
+    ;; (2000 1 250)
+    ;; (4000 1 125)
+    ;; (8000 1 63)
+    ;; (10000 1 50)
+    ;; (20000 1 25)
+    ;; (40000 1 20)
+    ;; (80000 1 20)
+    ;; (100000 1 20)
+    ;; (200000 1 15)
     ;; (500000 1 15)
     ;; (1000000 1 10)
     ))
@@ -86,12 +87,12 @@
 (define paddings
   (cons 0 (map (lambda (v) (- (expt 2 v) 4))
                (list
-                3
-                4
-                6
+                ;; 3
+                ;; 4
+                ;; 6
                 8
-                10
-                12
+                ;; 10
+                ;; 12
                 14
                 ))))
 
@@ -199,6 +200,22 @@
        (vector problem-size
                (string->number (hash-ref (hash-ref resultset row-name) "mean_rate_kHz"))))))
 
+  (define (raw-data-for structure color)
+    (points
+     #:color color
+     #:sym 'fullcircle4
+     #:alpha 0.05
+     (for/fold ([points '()])
+               ([size-count-and-nrepeats (in-list problem-sizes-bulk-counts-and-nrepeats)]
+                #:when (not (too-big? (car size-count-and-nrepeats) padding)))
+       (define problem-size (car size-count-and-nrepeats))
+       (define resultset (hash-ref results (list problem-size padding base)))
+       (define row-name (format "~a ~a" structure variation))
+       (define rawdata (string-split (hash-ref (hash-ref resultset row-name) "rawdata")))
+       (for/fold ([points points])
+                 ([datum rawdata])
+         (cons (vector problem-size (string->number datum)) points)))))
+
   (define (error-bars-for structure)
     (asymmetric-error-bars
      (for*/list ([size-count-and-nrepeats (in-list problem-sizes-bulk-counts-and-nrepeats)]
@@ -207,9 +224,9 @@
        (define resultset (hash-ref results (list problem-size padding base)))
        (define row-name (format "~a ~a" structure variation))
        (vector problem-size
-               (or (string->number (hash-ref (hash-ref resultset row-name) "q2_rate_kHz")) 0)
-               (or (string->number (hash-ref (hash-ref resultset row-name) "q0_rate_kHz")) 0)
-               (or (string->number (hash-ref (hash-ref resultset row-name) "q4_rate_kHz")) +inf.0)))))
+               (or (string->number (hash-ref (hash-ref resultset row-name) "mean_rate_kHz")) 0)
+               (or (string->number (hash-ref (hash-ref resultset row-name) "lo_95ci_rate_kHz")) 0)
+               (or (string->number (hash-ref (hash-ref resultset row-name) "hi_95ci_rate_kHz")) +inf.0)))))
 
   (define (max-min-for structure sym)
     (points
@@ -232,6 +249,9 @@
     (plot-file (list (lines-for "Critbit" 1)
                      (lines-for "StringSet" 2)
                      (lines-for "Hashtbl" 3)
+                     (raw-data-for "Critbit" 1)
+                     (raw-data-for "StringSet" 2)
+                     (raw-data-for "Hashtbl" 3)
                      (error-bars-for "Critbit")
                      (error-bars-for "StringSet")
                      (error-bars-for "Hashtbl")
