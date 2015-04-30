@@ -82,8 +82,9 @@ let stats n bulk_count scale additional_info label thunk =
   let rec loop remaining =
     if remaining > 0
     then
-      let (delta, _) = time thunk bulk_count in
-      delta :: loop (remaining - 1)
+      (Gc.full_major ();
+       let (delta, _) = time thunk bulk_count in
+       delta :: loop (remaining - 1))
     else []
   in
   let result = thunk() in (* discard a single run to warm up *)
