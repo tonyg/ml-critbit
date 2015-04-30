@@ -188,17 +188,22 @@
   (define plot-filename (format "plot-~a-~a-~a.png" variation padding base))
   (printf "Plotting ~a...\n" plot-filename)
 
-  (define (lines-for structure color)
+  (define (lines-for structure
+                     color
+                     #:suffix [suffix ""]
+                     #:key [key "mean_rate_kHz"]
+                     #:style [style 'solid])
     (lines
      #:color color
-     #:label structure
+     #:label (string-append structure suffix)
+     #:style style
      (for*/list ([size-count-and-nrepeats (in-list problem-sizes-bulk-counts-and-nrepeats)]
                  #:when (not (too-big? (car size-count-and-nrepeats) padding)))
        (define problem-size (car size-count-and-nrepeats))
        (define resultset (hash-ref results (list problem-size padding base)))
        (define row-name (format "~a ~a" structure variation))
        (vector problem-size
-               (string->number (hash-ref (hash-ref resultset row-name) "mean_rate_kHz"))))))
+               (string->number (hash-ref (hash-ref resultset row-name) key))))))
 
   (define (raw-data-for structure color)
     (points
@@ -246,9 +251,15 @@
   (parameterize ([discrete-histogram-skip 2.5] ;; any value larger than the number of alternatives
                  [plot-x-transform log-transform]
                  [plot-x-ticks (log-ticks)])
-    (plot-file (list (lines-for "Critbit" 1)
-                     (lines-for "StringSet" 2)
-                     (lines-for "Hashtbl" 3)
+    (plot-file (list (lines-for #:suffix " (mean)" "Critbit" 1)
+                     (lines-for #:suffix " (mean)" "StringSet" 2)
+                     (lines-for #:suffix " (mean)" "Hashtbl" 3)
+                     (lines-for #:suffix " (median)"
+                                #:key "q2_rate_kHz" #:style 'short-dash "Critbit" 1)
+                     (lines-for #:suffix " (median)"
+                                #:key "q2_rate_kHz" #:style 'short-dash "StringSet" 2)
+                     (lines-for #:suffix " (median)"
+                                #:key "q2_rate_kHz" #:style 'short-dash "Hashtbl" 3)
                      (raw-data-for "Critbit" 1)
                      (raw-data-for "StringSet" 2)
                      (raw-data-for "Hashtbl" 3)
