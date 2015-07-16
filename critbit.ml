@@ -68,7 +68,7 @@ let add k t = match t with
 	if bit_ref k index
 	then maybe_splice one (fun sib -> Kid (Node (index, zero, sib)))
 	else maybe_splice zero (fun sib -> Kid (Node (index, sib, one)))
-    in Nonempty (old_count + 1,
+    in Nonempty (old_count + 1, (* BUG: incorrect when k already exists in t *)
 		 (match walk n with
 		   | Pos p -> splice_key p n
 		   | Kid n' -> n'))
