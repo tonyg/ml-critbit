@@ -34,10 +34,11 @@ type insertion =
   | Pos of index
   | Kid of node
 
-let join a b =
+let join a b added_count =
   let pos = infinite_bytes_diffbitpos a b in
   if pos = -1
-  then Kid (Leaf a) (* they're the same (infinite zeros on the end!) byte string *)
+  then (added_count := 0; Kid (Leaf a))
+       (* they're the same (infinite zeros on the end!) byte string *)
   else Pos pos
 
 let mem k t = match t with
@@ -51,13 +52,14 @@ let mem k t = match t with
 let add k t = match t with
   | Empty -> Nonempty (1, Leaf k)
   | Nonempty (old_count, n) ->
+    let added_count = ref 1 in
     let splice_key p sib =
       if bit_ref k p
       then Node (p, sib, Leaf k)
       else Node (p, Leaf k, sib)
     in
     let rec walk n = match n with
-      | Leaf bs -> join bs k
+      | Leaf bs -> join bs k added_count
       | Node (index, zero, one) ->
 	let maybe_splice kid stitch =
 	  let kid' = walk kid in
@@ -68,7 +70,7 @@ let add k t = match t with
 	if bit_ref k index
 	then maybe_splice one (fun sib -> Kid (Node (index, zero, sib)))
 	else maybe_splice zero (fun sib -> Kid (Node (index, sib, one)))
-    in Nonempty (old_count + 1, (* BUG: incorrect when k already exists in t *)
+    in Nonempty (old_count + !added_count,
 		 (match walk n with
 		   | Pos p -> splice_key p n
 		   | Kid n' -> n'))
